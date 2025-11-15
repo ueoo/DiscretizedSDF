@@ -1,17 +1,10 @@
 from setuptools import setup
-from torch.utils.cpp_extension import CUDAExtension, BuildExtension
+from torch.utils.cpp_extension import BuildExtension, CUDAExtension
+
 
 setup(
     name="fused_ssim",
-    packages=['fused_ssim'],
-    ext_modules=[
-        CUDAExtension(
-            name="fused_ssim_cuda",
-            sources=[
-            "ssim.cu",
-            "ext.cpp"])
-        ],
-    cmdclass={
-        'build_ext': BuildExtension
-    }
+    packages=["fused_ssim"],
+    ext_modules=[CUDAExtension(name="fused_ssim_cuda", sources=["ssim.cu", "ext.cpp"])],
+    cmdclass={"build_ext": BuildExtension},
 )

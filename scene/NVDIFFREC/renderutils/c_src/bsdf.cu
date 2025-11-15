@@ -2,10 +2,10 @@
  * Copyright (c) 2020-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related 
- * documentation and any modifications thereto. Any use, reproduction, 
+ * property and proprietary rights in and to this material, related
+ * documentation and any modifications thereto. Any use, reproduction,
  * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or 
+ * without an express license agreement from NVIDIA CORPORATION or
  * its affiliates is strictly prohibited.
  */
 
@@ -29,7 +29,7 @@ __device__ inline void bwdLambert(const vec3f nrm, const vec3f wi, vec3f& d_nrm,
 }
 
 //------------------------------------------------------------------------
-// Fresnel Schlick 
+// Fresnel Schlick
 
 __device__ inline float fwdFresnelSchlick(const float f0, const float f90, const float cosTheta)
 {
@@ -85,10 +85,10 @@ __device__ inline float fwdFrostbiteDiffuse(const vec3f nrm, const vec3f wi, con
         float energyFactor = 1.0f - (0.51f / 1.51f) * linearRoughness;
         float f90 = energyBias + 2.f * wiDotH * wiDotH * linearRoughness;
         float f0 = 1.f;
-        
+
         float wiScatter = fwdFresnelSchlick(f0, f90, wiDotN);
         float woScatter = fwdFresnelSchlick(f0, f90, woDotN);
-        
+
         return wiScatter * woScatter * energyFactor;
     }
     else return 0.0f;
@@ -108,7 +108,7 @@ __device__ inline void bwdFrostbiteDiffuse(const vec3f nrm, const vec3f wi, cons
         float energyFactor = 1.0f - (0.51f / 1.51f) * linearRoughness;
         float f90 = energyBias + 2.f * wiDotH * wiDotH * linearRoughness;
         float f0 = 1.f;
-        
+
         float wiScatter = fwdFresnelSchlick(f0, f90, wiDotN);
         float woScatter = fwdFresnelSchlick(f0, f90, woDotN);
 
@@ -116,7 +116,7 @@ __device__ inline void bwdFrostbiteDiffuse(const vec3f nrm, const vec3f wi, cons
         // Backprop: return wiScatter * woScatter * energyFactor;
         float d_wiScatter = d_out * woScatter * energyFactor;
         float d_woScatter = d_out * wiScatter * energyFactor;
-        float d_energyFactor = d_out * wiScatter * woScatter; 
+        float d_energyFactor = d_out * wiScatter * woScatter;
 
         // Backprop: float woScatter = fwdFresnelSchlick(f0, f90, woDotN);
         float d_woDotN = 0.0f, d_f0 = 0.0, d_f90 = 0.0f;
@@ -141,7 +141,7 @@ __device__ inline void bwdFrostbiteDiffuse(const vec3f nrm, const vec3f wi, cons
         vec3f d_h(0);
         bwdDot(wi, h, d_wi, d_h, d_wiDotH);
 
-        // Backprop: vec3f h = safeNormalize(wo + wi);     
+        // Backprop: vec3f h = safeNormalize(wo + wi);
         vec3f d_wo_wi(0);
         bwdSafeNormalize(wo + wi, d_wo_wi, d_h);
         d_wi += d_wo_wi; d_wo += d_wo_wi;
@@ -313,7 +313,7 @@ __device__ vec3f fwdPbrBSDF(const vec3f kd, const vec3f arm, const vec3f pos, co
     if (BSDF == 0)
         diff = fwdLambert(nrm, wi);
     else
-        diff = fwdFrostbiteDiffuse(nrm, wi, wo, arm.y);    
+        diff = fwdFrostbiteDiffuse(nrm, wi, wo, arm.y);
     vec3f diffuse = diff_col * diff;
     vec3f specular = fwdPbrSpecular(spec_col, nrm, wo, wi, alpha, min_roughness);
 
@@ -338,7 +338,7 @@ __device__ void bwdPbrBSDF(
     if (BSDF == 0)
         diff = fwdLambert(nrm, wi);
     else
-        diff = fwdFrostbiteDiffuse(nrm, wi, wo, arm.y);    
+        diff = fwdFrostbiteDiffuse(nrm, wi, wo, arm.y);
 
     ////////////////////////////////////////////////////////////////////////
     // BWD
@@ -351,7 +351,7 @@ __device__ void bwdPbrBSDF(
     if (BSDF == 0)
         bwdLambert(nrm, wi, d_nrm, d_wi, d_diff);
     else
-        bwdFrostbiteDiffuse(nrm, wi, wo, arm.y, d_nrm, d_wi, d_wo, d_arm.y, d_diff);    
+        bwdFrostbiteDiffuse(nrm, wi, wo, arm.y, d_nrm, d_wi, d_wo, d_arm.y, d_diff);
 
     // Backprop: diff_col = kd * (1.0f - arm.z)
     vec3f d_diff_col = d_out * diff;
@@ -515,7 +515,7 @@ __global__ void ndfGGXFwdKernel(NdfGGXParams p)
     float alphaSqr = p.alphaSqr.fetch1(px, py, pz);
     float cosTheta = p.cosTheta.fetch1(px, py, pz);
     float res = fwdNdfGGX(alphaSqr, cosTheta);
-    
+
     p.out.store(px, py, pz, res);
 }
 
@@ -588,7 +588,7 @@ __global__ void maskingSmithFwdKernel(MaskingSmithParams p)
     float cosThetaI = p.cosThetaI.fetch1(px, py, pz);
     float cosThetaO = p.cosThetaO.fetch1(px, py, pz);
     float res = fwdMaskingSmithGGXCorrelated(alphaSqr, cosThetaI, cosThetaO);
-    
+
     p.out.store(px, py, pz, res);
 }
 

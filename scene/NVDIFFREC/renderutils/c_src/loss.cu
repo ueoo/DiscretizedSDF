@@ -2,10 +2,10 @@
  * Copyright (c) 2020-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related 
- * documentation and any modifications thereto. Any use, reproduction, 
+ * property and proprietary rights in and to this material, related
+ * documentation and any modifications thereto. Any use, reproduction,
  * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or 
+ * without an express license agreement from NVIDIA CORPORATION or
  * its affiliates is strictly prohibited.
  */
 
@@ -123,7 +123,7 @@ __global__ void imgLossFwdKernel(LossKernelParams p)
             vloss = vec3f(fwdSMAPE(img.x, target.x), fwdSMAPE(img.y, target.y), fwdSMAPE(img.z, target.z));
         else
             vloss = vec3f(abs(img.x - target.x), abs(img.y - target.y), abs(img.z - target.z));
-        
+
         floss = sum(vloss) / 3.0f;
     }
 
@@ -135,7 +135,7 @@ __global__ void imgLossFwdKernel(LossKernelParams p)
 }
 
 __global__ void imgLossBwdKernel(LossKernelParams p)
-{ 
+{
     // Calculate pixel position.
     unsigned int px = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int py = blockIdx.y * blockDim.y + threadIdx.y;

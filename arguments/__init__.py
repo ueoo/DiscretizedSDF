@@ -3,21 +3,24 @@
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
 # All rights reserved.
 #
-# This software is free for non-commercial, research and evaluation use 
+# This software is free for non-commercial, research and evaluation use
 # under the terms of the LICENSE.md file.
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-from argparse import ArgumentParser, Namespace
-import sys
 import os
+import sys
+
+from argparse import ArgumentParser, Namespace
+
 
 class GroupParams:
     pass
 
+
 class ParamGroup:
-    def __init__(self, parser: ArgumentParser, name : str, fill_none = False):
+    def __init__(self, parser: ArgumentParser, name: str, fill_none=False):
         group = parser.add_argument_group(name)
         for key, value in vars(self).items():
             shorthand = False
@@ -25,7 +28,7 @@ class ParamGroup:
                 shorthand = True
                 key = key[1:]
             t = type(value)
-            value = value if not fill_none else None 
+            value = value if not fill_none else None
             if shorthand:
                 if t == bool:
                     group.add_argument("--" + key, ("-" + key[0:1]), default=value, action="store_true")
@@ -44,7 +47,8 @@ class ParamGroup:
                 setattr(group, arg[0], arg[1])
         return group
 
-class ModelParams(ParamGroup): 
+
+class ModelParams(ParamGroup):
     def __init__(self, parser, sentinel=False):
         self.sh_degree = 3
         self._source_path = ""
@@ -65,13 +69,14 @@ class ModelParams(ParamGroup):
         g.source_path = os.path.abspath(g.source_path)
         return g
 
+
 class PipelineParams(ParamGroup):
     def __init__(self, parser):
         self.convert_SHs_python = False
         self.compute_cov3D_python = False
-        self.render_mode = "defer" # renderer type
-        self.gaussian_type = '2d' # Gaussian primitive type
-        self.envmap_path = ''
+        self.render_mode = "defer"  # renderer type
+        self.gaussian_type = "2d"  # Gaussian primitive type
+        self.envmap_path = ""
 
         super().__init__(parser, "Pipeline Parameters")
         self.brdf = False
@@ -83,10 +88,11 @@ class PipelineParams(ParamGroup):
         g.env_mode = args.env_mode
         return g
 
+
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
         self.iterations = 30_000
-        
+
         # Learning rates
         self.position_lr_init = 0.00016
         self.position_lr_final = 0.0000016
@@ -101,7 +107,7 @@ class OptimizationParams(ParamGroup):
         self.indirect_lr = 0.05
         self.deviation_lr = 0.005
         self.envmap_lr_init = 1.6e-2
-        self.envmap_lr_final = 1.6e-3 
+        self.envmap_lr_final = 1.6e-3
         self.envmap_lr_delay_mult = 0.01
         self.envmap_lr_max_steps = 30_000
         self.normal_lr = 0.0002
@@ -118,15 +124,15 @@ class OptimizationParams(ParamGroup):
         self.lambda_zero_one = 1e-3
         self.lambda_predicted_normal = 2e-1
         self.lambda_delta_reg = 1e-3
-        self.lambda_opacity_reg = 0.
-        self.lambda_dev = 100.
+        self.lambda_opacity_reg = 0.0
+        self.lambda_dev = 100.0
         self.lambda_brdf_smoothness = 0.0
         self.lambda_base_smoothness = 0.0
         self.lambda_light_reg = 0.0
         self.lambda_distortion = 100.0
         self.lambda_proj = 0.0
-        
-        # Hyperparameters        
+
+        # Hyperparameters
         self.percent_dense = 0.01
         self.densify_grad_threshold = 0.0002
         self.opacity_cull = 0.005
@@ -141,10 +147,11 @@ class OptimizationParams(ParamGroup):
         self.metallic = 1
         self.proj_thres = 0.1
         self.sphere_init = False
-        
+
         super().__init__(parser, "Optimization Parameters")
 
-def get_combined_args(parser : ArgumentParser):
+
+def get_combined_args(parser: ArgumentParser):
     cmdlne_string = sys.argv[1:]
     cfgfile_string = "Namespace()"
     args_cmdline = parser.parse_args(cmdlne_string)
@@ -161,7 +168,7 @@ def get_combined_args(parser : ArgumentParser):
     args_cfgfile = eval(cfgfile_string)
 
     merged_dict = vars(args_cfgfile).copy()
-    for k,v in vars(args_cmdline).items():
+    for k, v in vars(args_cmdline).items():
         if v != None:
             merged_dict[k] = v
     return Namespace(**merged_dict)

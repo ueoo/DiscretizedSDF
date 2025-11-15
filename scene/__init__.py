@@ -3,34 +3,38 @@
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
 # All rights reserved.
 #
-# This software is free for non-commercial, research and evaluation use 
+# This software is free for non-commercial, research and evaluation use
 # under the terms of the LICENSE.md file.
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
 
+import json
 import os
 import random
-import json
-from utils.system_utils import searchForMaxIteration
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+
+from tqdm import tqdm
+
+from arguments import ModelParams
 from scene.dataset_readers import sceneLoadTypeCallbacks
 from scene.gaussian_model import GaussianModel
-from arguments import ModelParams
-from utils.camera_utils import cameraList_from_camInfos, camera_to_JSON
-import torch
-from utils.system_utils import mkdir_p
-from scene.NVDIFFREC import save_env_map, load_env, load_latlong_env
-from tqdm import tqdm
+from scene.NVDIFFREC import load_env, load_latlong_env, save_env_map
+from utils.camera_utils import camera_to_JSON, cameraList_from_camInfos
 from utils.sh_utils import eval_sh
-import numpy as np
-import torch.nn.functional as F
+from utils.system_utils import mkdir_p, searchForMaxIteration
+
 
 class Scene:
 
-    gaussians : GaussianModel
+    gaussians: GaussianModel
 
-    def __init__(self, args : ModelParams, gaussians : GaussianModel, 
-                 load_iteration=None, shuffle=True, resolution_scales=[1.0]):
+    def __init__(
+        self, args: ModelParams, gaussians: GaussianModel, load_iteration=None, shuffle=True, resolution_scales=[1.0]
+    ):
         """b
         :param path: Path to colmap scene main folder.
         """
@@ -46,7 +50,7 @@ class Scene:
             else:
                 self.loaded_iter = load_iteration
             print("Loading trained model at iteration {}".format(self.loaded_iter))
-        
+
         self.train_cameras = {}
         self.test_cameras = {}
 
@@ -60,8 +64,9 @@ class Scene:
             print("No data")
 
         if not self.loaded_iter:
-            with open(self.scene_info.ply_path, 'rb') as src_file, open(
-                os.path.join(self.model_path, "input.ply") , 'wb') as dest_file:
+            with open(self.scene_info.ply_path, "rb") as src_file, open(
+                os.path.join(self.model_path, "input.ply"), "wb"
+            ) as dest_file:
                 dest_file.write(src_file.read())
             json_cams = []
             camlist = []
@@ -71,7 +76,7 @@ class Scene:
                 camlist.extend(self.scene_info.train_cameras)
             for id, cam in enumerate(camlist):
                 json_cams.append(camera_to_JSON(id, cam))
-            with open(os.path.join(self.model_path, "cameras.json"), 'w') as file:
+            with open(os.path.join(self.model_path, "cameras.json"), "w") as file:
                 json.dump(json_cams, file)
 
         if shuffle:
@@ -81,9 +86,13 @@ class Scene:
             self.cameras_extent = self.scene_info.nerf_normalization["radius"]
             for resolution_scale in resolution_scales:
                 print("Loading Training Cameras")
-                self.train_cameras[resolution_scale] = cameraList_from_camInfos(self.scene_info.train_cameras, resolution_scale, args)
+                self.train_cameras[resolution_scale] = cameraList_from_camInfos(
+                    self.scene_info.train_cameras, resolution_scale, args
+                )
                 print("Loading Test Cameras")
-                self.test_cameras[resolution_scale] = cameraList_from_camInfos(self.scene_info.test_cameras, resolution_scale, args)
+                self.test_cameras[resolution_scale] = cameraList_from_camInfos(
+                    self.scene_info.test_cameras, resolution_scale, args
+                )
         except:
             pass
         print(self.loaded_iter)
@@ -95,32 +104,27 @@ class Scene:
     def save(self, iteration):
         point_cloud_path = os.path.join(self.model_path, "point_cloud/iteration_{}".format(iteration))
         self.gaussians.save_ply(os.path.join(point_cloud_path, "point_cloud.ply"))
-        if self.env_mode == 'envmap':
+        if self.env_mode == "envmap":
             envmap_path = os.path.join(self.model_path, f"envmap/iteration_{iteration}/envmap.hdr")
             mkdir_p(os.path.dirname(envmap_path))
             save_env_map(envmap_path, self.gaussians.envmap)
-       
-        
+
     def getTrainCameras(self, scale=1.0):
         return self.train_cameras[scale]
 
     def getTestCameras(self, scale=1.0):
         return self.test_cameras[scale]
-    
+
     def resume(self):
-        self.gaussians.load_ply(os.path.join(self.model_path,
-                                                           "point_cloud",
-                                                           "iteration_" + str(self.loaded_iter),
-                                                           "point_cloud.ply"))
-        
+        self.gaussians.load_ply(
+            os.path.join(self.model_path, "point_cloud", "iteration_" + str(self.loaded_iter), "point_cloud.ply")
+        )
+
         env_mode = self.args.env_mode
-        if env_mode == 'envmap':
-            fn = os.path.join(self.model_path,
-                            "envmap",
-                            "iteration_" + str(self.loaded_iter),
-                            "envmap.hdr")
+        if env_mode == "envmap":
+            fn = os.path.join(self.model_path, "envmap", "iteration_" + str(self.loaded_iter), "envmap.hdr")
             if os.path.exists(fn):
                 self.gaussians.envmap = load_env(fn, scale=1.0)
                 print(f"Load envmap from: {fn}")
             else:
-                print('Env. map does not exist.')
+                print("Env. map does not exist.")

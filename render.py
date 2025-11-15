@@ -3,36 +3,44 @@
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
 # All rights reserved.
 #
-# This software is free for non-commercial, research and evaluation use 
+# This software is free for non-commercial, research and evaluation use
 # under the terms of the LICENSE.md file.
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
 
-import torch
-from scene import Scene
 import os
-from tqdm import tqdm
-from os import makedirs
-from gaussian_renderer import RENDER_DICT, render_lighting
-import torchvision
-from utils.general_utils import safe_state
+
 from argparse import ArgumentParser
+from os import makedirs
+
+import torch
+import torchvision
+
+from tqdm import tqdm
+
 from arguments import ModelParams, PipelineParams, get_combined_args
-from scene import GaussianModel
-from utils.image_utils import apply_depth_colormap
+from gaussian_renderer import RENDER_DICT, render_lighting
+from scene import GaussianModel, Scene
 from scene.NVDIFFREC.util import save_image_raw
 from utils.camera_utils import interpolate_camera
+from utils.general_utils import safe_state
+from utils.image_utils import apply_depth_colormap
+
 
 def render_lightings(model_path, name, iteration, scene, sample_num):
     gaussians = scene.gaussians
     lighting_path = os.path.join(model_path, name, "ours_{}".format(iteration))
-    makedirs(lighting_path, exist_ok=True)    
+    makedirs(lighting_path, exist_ok=True)
     sampled_indicies = torch.arange(gaussians.get_xyz.shape[0], dtype=torch.long)[:sample_num]
     for sampled_index in tqdm(sampled_indicies, desc="Rendering lighting progress"):
         lighting = render_lighting(gaussians, sampled_index=sampled_index)
-        torchvision.utils.save_image(lighting, os.path.join(lighting_path, '{0:05d}'.format(sampled_index) + ".png"))
-        save_image_raw(os.path.join(lighting_path, '{0:05d}'.format(sampled_index) + ".hdr"), lighting.permute(1,2,0).detach().cpu().numpy())
+        torchvision.utils.save_image(lighting, os.path.join(lighting_path, "{0:05d}".format(sampled_index) + ".png"))
+        save_image_raw(
+            os.path.join(lighting_path, "{0:05d}".format(sampled_index) + ".hdr"),
+            lighting.permute(1, 2, 0).detach().cpu().numpy(),
+        )
+
 
 def render_set(model_path, name, iteration, views, scene, pipeline, background):
     render_path = os.path.join(model_path, name, "ours_{}".format(iteration), "renders")
@@ -47,45 +55,50 @@ def render_set(model_path, name, iteration, views, scene, pipeline, background):
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         torch.cuda.synchronize()
         render_pkg = render_fn(view, scene, pipeline, background, debug=False)
-      
+
         torch.cuda.synchronize()
 
         gt = view.original_image[0:3, :, :]
         gt_alpha_mask = view.gt_alpha_mask
-        torchvision.utils.save_image(render_pkg["render"], os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
-        torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
-        torchvision.utils.save_image(gt_alpha_mask, os.path.join(gt_masks_path, '{0:05d}'.format(idx) + ".png"))
+        torchvision.utils.save_image(render_pkg["render"], os.path.join(render_path, "{0:05d}".format(idx) + ".png"))
+        torchvision.utils.save_image(gt, os.path.join(gts_path, "{0:05d}".format(idx) + ".png"))
+        torchvision.utils.save_image(gt_alpha_mask, os.path.join(gt_masks_path, "{0:05d}".format(idx) + ".png"))
         for k in render_pkg.keys():
-            if render_pkg[k].dim()<3 or k=="render" or k=="delta_normal_norm":
+            if render_pkg[k].dim() < 3 or k == "render" or k == "delta_normal_norm":
                 continue
             save_path = os.path.join(model_path, name, "ours_{}".format(iteration), k)
             makedirs(save_path, exist_ok=True)
             if k == "alpha":
-                render_pkg[k] = apply_depth_colormap(render_pkg["alpha"][0][...,None], min=0., max=1.).permute(2,0,1)
+                render_pkg[k] = apply_depth_colormap(render_pkg["alpha"][0][..., None], min=0.0, max=1.0).permute(
+                    2, 0, 1
+                )
             if k == "depth":
-                render_pkg[k] = apply_depth_colormap(-render_pkg["depth"][0][...,None]).permute(2,0,1)
+                render_pkg[k] = apply_depth_colormap(-render_pkg["depth"][0][..., None]).permute(2, 0, 1)
             elif "normal" in k:
-                render_pkg[k] = 0.5 + (0.5*render_pkg[k])
-            torchvision.utils.save_image(render_pkg[k], os.path.join(save_path, '{0:05d}'.format(idx) + ".png"))
+                render_pkg[k] = 0.5 + (0.5 * render_pkg[k])
+            torchvision.utils.save_image(render_pkg[k], os.path.join(save_path, "{0:05d}".format(idx) + ".png"))
 
-def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool):
+
+def render_sets(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool):
     with torch.no_grad():
-        gaussians = GaussianModel(dataset.sh_degree, dataset.env_mode, dataset.env_res,
-                              dataset.use_sdf, True, True)
+        gaussians = GaussianModel(dataset.sh_degree, dataset.env_mode, dataset.env_res, dataset.use_sdf, True, True)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
-        bg_color = [1,1,1] if dataset.white_background else [0, 0, 0]
+        bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
         background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
         if args.interpolate > 0:
             cams = interpolate_camera(scene.getTrainCameras(), args.interpolate)
         else:
             cams = scene.getTrainCameras()
         if not skip_train:
-             render_set(dataset.model_path, "train", scene.loaded_iter, cams, scene, pipeline, background)
+            render_set(dataset.model_path, "train", scene.loaded_iter, cams, scene, pipeline, background)
 
         if not skip_test:
-             render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), scene, pipeline, background)
+            render_set(
+                dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), scene, pipeline, background
+            )
 
         render_lightings(dataset.model_path, "lighting", scene.loaded_iter, scene, sample_num=1)
+
 
 if __name__ == "__main__":
     # Set up command line argument parser

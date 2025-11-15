@@ -3,7 +3,7 @@
  * GRAPHDECO research group, https://team.inria.fr/graphdeco
  * All rights reserved.
  *
- * This software is free for non-commercial, research and evaluation use 
+ * This software is free for non-commercial, research and evaluation use
  * under the terms of the LICENSE.md file.
  *
  * For inquiries contact  george.drettakis@inria.fr
@@ -132,7 +132,7 @@ __device__ void computeColorFromSH(int idx, int deg, int max_coeffs, const glm::
 	// Account for normalization of direction
 	float3 dL_dmean = dnormvdv(float3{ dir_orig.x, dir_orig.y, dir_orig.z }, float3{ dL_ddir.x, dL_ddir.y, dL_ddir.z });
 
-	// Gradients of loss w.r.t. Gaussian means, but only the portion 
+	// Gradients of loss w.r.t. Gaussian means, but only the portion
 	// that is caused because the mean affects the view-dependent color.
 	// Additional mean gradient is accumulated in below methods.
 	dL_dmeans[idx] += glm::vec3(dL_dmean.x, dL_dmean.y, dL_dmean.z);
@@ -193,7 +193,7 @@ renderCUDA(
 	// __shared__ float collected_depths[BLOCK_SIZE];
 
 	// In the forward, we stored the final value for T, the
-	// product of all (1 - alpha) factors. 
+	// product of all (1 - alpha) factors.
 	const float T_final = inside ? final_Ts[pix_id] : 0;
 	float T = T_final;
 
@@ -220,7 +220,7 @@ renderCUDA(
 		dL_ddepth = dL_depths[DEPTH_OFFSET * H * W + pix_id];
 		dL_daccum = dL_depths[ALPHA_OFFSET * H * W + pix_id];
 		dL_dreg = dL_depths[DISTORTION_OFFSET * H * W + pix_id];
-		for (int i = 0; i < 3; i++) 
+		for (int i = 0; i < 3; i++)
 			dL_dnormal2D[i] = dL_depths[(NORMAL_OFFSET + i) * H * W + pix_id];
 
 		dL_dmedian_depth = dL_depths[MIDDEPTH_OFFSET * H * W + pix_id];
@@ -251,7 +251,7 @@ renderCUDA(
 	float last_color[C] = { 0 };
 	float last_pbr[PBR_LEN] = { 0 };
 
-	// Gradient of pixel coordinate w.r.t. normalized 
+	// Gradient of pixel coordinate w.r.t. normalized
 	// screen-space viewport corrdinates (-1 to 1)
 	const float ddelx_dx = 0.5 * W;
 	const float ddely_dy = 0.5 * H;
@@ -300,13 +300,13 @@ renderCUDA(
 			float3 p = cross(k, l);
 			if (p.z == 0.0) continue;
 			float2 s = {p.x / p.z, p.y / p.z};
-			float rho3d = (s.x * s.x + s.y * s.y); 
+			float rho3d = (s.x * s.x + s.y * s.y);
 			float2 d = {xy.x - pixf.x, xy.y - pixf.y};
-			float rho2d = FilterInvSquare * (d.x * d.x + d.y * d.y); 
+			float rho2d = FilterInvSquare * (d.x * d.x + d.y * d.y);
 
 			// compute intersection and depth
 			float rho = min(rho3d, rho2d);
-			float c_d = (rho3d <= rho2d) ? (s.x * Tw.x + s.y * Tw.y) + Tw.z : Tw.z; 
+			float c_d = (rho3d <= rho2d) ? (s.x * Tw.x + s.y * Tw.y) + Tw.z : Tw.z;
 			if (c_d < near_n) continue;
 			float4 nor_o = collected_normal_opacity[j];
 			float normal[3] = {nor_o.x, nor_o.y, nor_o.z};
@@ -340,7 +340,7 @@ renderCUDA(
 
 				const float dL_dchannel = dL_dpixel[ch];
 				dL_dalpha += (c - accum_rec[ch]) * dL_dchannel;
-				// Update the gradients w.r.t. color of the Gaussian. 
+				// Update the gradients w.r.t. color of the Gaussian.
 				// Atomic, since this pixel is just one of potentially
 				// many that were affected by this Gaussian.
 				atomicAdd(&(dL_dcolors[global_id * C + ch]), dchannel_dcolor * dL_dchannel);
@@ -364,8 +364,8 @@ renderCUDA(
 				dL_dz += dL_dmedian_depth;
 				// dL_dweight += dL_dmax_dweight;
 			}
-#if DETACH_WEIGHT 
-			// if not detached weight, sometimes 
+#if DETACH_WEIGHT
+			// if not detached weight, sometimes
 			// it will bia toward creating extragated 2D Gaussians near front
 			dL_dweight += 0;
 #else
@@ -409,7 +409,7 @@ renderCUDA(
 			// Helpful reusable temporary variables
 			const float dL_dG = nor_o.w * dL_dalpha;
 #if RENDER_AXUTILITY
-			dL_dz += alpha * T * dL_ddepth; 
+			dL_dz += alpha * T * dL_ddepth;
 #endif
 
 			if (rho3d <= rho2d) {
@@ -428,8 +428,8 @@ renderCUDA(
 				const float3 dL_dTu = {-dL_dk.x, -dL_dk.y, -dL_dk.z};
 				const float3 dL_dTv = {-dL_dl.x, -dL_dl.y, -dL_dl.z};
 				const float3 dL_dTw = {
-					pixf.x * dL_dk.x + pixf.y * dL_dl.x + dL_dz * dz_dTw.x, 
-					pixf.x * dL_dk.y + pixf.y * dL_dl.y + dL_dz * dz_dTw.y, 
+					pixf.x * dL_dk.x + pixf.y * dL_dl.x + dL_dz * dz_dTw.x,
+					pixf.x * dL_dk.y + pixf.y * dL_dl.y + dL_dz * dz_dTw.y,
 					pixf.x * dL_dk.z + pixf.y * dL_dl.z + dL_dz * dz_dTw.z};
 
 
@@ -460,18 +460,18 @@ renderCUDA(
 
 
 __device__ void compute_transmat_aabb(
-	int idx, 
+	int idx,
 	const float* Ts_precomp,
-	const float3* p_origs, 
-	const glm::vec2* scales, 
-	const glm::vec4* rots, 
-	const float* projmatrix, 
-	const float* viewmatrix, 
-	const int W, const int H, 
+	const float3* p_origs,
+	const glm::vec2* scales,
+	const glm::vec4* rots,
+	const float* projmatrix,
+	const float* viewmatrix,
+	const int W, const int H,
 	const float3* dL_dnormals,
-	const float3* dL_dmean2Ds, 
-	float* dL_dTs, 
-	glm::vec3* dL_dmeans, 
+	const float3* dL_dmean2Ds,
+	float* dL_dTs,
+	glm::vec3* dL_dmeans,
 	glm::vec2* dL_dscales,
 	 glm::vec4* dL_drots)
 {
@@ -483,7 +483,7 @@ __device__ void compute_transmat_aabb(
 	float3 p_orig;
 	glm::vec4 rot;
 	glm::vec2 scale;
-	
+
 	// Get transformation matrix of the Gaussian
 	if (Ts_precomp != nullptr) {
 		T = glm::mat3(
@@ -498,7 +498,7 @@ __device__ void compute_transmat_aabb(
 		scale = scales[idx];
 		R = quat_to_rotmat(rot);
 		S = scale_to_mat(scale, 1.0f);
-		
+
 		glm::mat3 L = R * S;
 		glm::mat3x4 M = glm::mat3x4(
 			glm::vec4(L[0], 0.0),
@@ -571,7 +571,7 @@ __device__ void compute_transmat_aabb(
 			return;
 		}
 	}
-	
+
 	if (Ts_precomp != nullptr) return;
 
 	// Update gradients w.r.t. scaling, rotation, position of the Gaussian
@@ -591,7 +591,7 @@ __device__ void compute_transmat_aabb(
 		dL_dRS[0] * glm::vec3(scale.x),
 		dL_dRS[1] * glm::vec3(scale.y),
 		dL_dRS[2]);
-	
+
 	dL_drots[idx] = quat_to_rotmat_vjp(rot, dL_dR);
 	dL_dscales[idx] = glm::vec2(
 		(float)glm::dot(dL_dRS[0], R[0]),
@@ -613,11 +613,11 @@ __global__ void preprocessCUDA(
 	const float scale_modifier,
 	const float* viewmatrix,
 	const float* projmatrix,
-	const float focal_x, 
+	const float focal_x,
 	const float focal_y,
 	const float tan_fovx,
 	const float tan_fovy,
-	const glm::vec3* campos, 
+	const glm::vec3* campos,
 	// grad input
 	float* dL_dtransMats,
 	const float* dL_dnormal3Ds,
@@ -636,24 +636,24 @@ __global__ void preprocessCUDA(
 	const int H = int(focal_y * tan_fovy * 2);
 	const float * Ts_precomp = (scales) ? nullptr : transMats;
 	compute_transmat_aabb(
-		idx, 
+		idx,
 		Ts_precomp,
-		means3D, scales, rotations, 
-		projmatrix, viewmatrix, W, H, 
-		(float3*)dL_dnormal3Ds, 
+		means3D, scales, rotations,
+		projmatrix, viewmatrix, W, H,
+		(float3*)dL_dnormal3Ds,
 		dL_dmean2Ds,
-		(dL_dtransMats), 
-		dL_dmean3Ds, 
-		dL_dscales, 
+		(dL_dtransMats),
+		dL_dmean3Ds,
+		dL_dscales,
 		dL_drots
 	);
 
 	if (shs)
 		computeColorFromSH(idx, D, M, (glm::vec3*)means3D, *campos, shs, clamped, (glm::vec3*)dL_dcolors, (glm::vec3*)dL_dmean3Ds, (glm::vec3*)dL_dshs);
-	
+
 	// hack the gradient here for densitification
 	float depth = transMats[idx * 9 + 8];
-	dL_dmean2Ds[idx].x = dL_dtransMats[idx * 9 + 2] * depth * 0.5 * float(W); // to ndc 
+	dL_dmean2Ds[idx].x = dL_dtransMats[idx * 9 + 2] * depth * 0.5 * float(W); // to ndc
 	dL_dmean2Ds[idx].y = dL_dtransMats[idx * 9 + 5] * depth * 0.5 * float(H); // to ndc
 }
 
@@ -672,7 +672,7 @@ void BACKWARD::preprocess(
 	const float* projmatrix,
 	const float focal_x, const float focal_y,
 	const float tan_fovx, const float tan_fovy,
-	const glm::vec3* campos, 
+	const glm::vec3* campos,
 	float3* dL_dmean2Ds,
 	const float* dL_dnormal3Ds,
 	float* dL_dtransMats,
@@ -681,7 +681,7 @@ void BACKWARD::preprocess(
 	glm::vec3* dL_dmean3Ds,
 	glm::vec2* dL_dscales,
 	glm::vec4* dL_drots)
-{	
+{
 	preprocessCUDA<NUM_CHANNELS><< <(P + 255) / 256, 256 >> > (
 		P, D, M,
 		(float3*)means3D,
@@ -694,11 +694,11 @@ void BACKWARD::preprocess(
 		scale_modifier,
 		viewmatrix,
 		projmatrix,
-		focal_x, 
+		focal_x,
 		focal_y,
 		tan_fovx,
 		tan_fovy,
-		campos,	
+		campos,
 		dL_dtransMats,
 		dL_dnormal3Ds,
 		dL_dcolors,

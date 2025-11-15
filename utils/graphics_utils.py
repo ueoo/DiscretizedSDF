@@ -3,20 +3,24 @@
 # GRAPHDECO research group, https://team.inria.fr/graphdeco
 # All rights reserved.
 #
-# This software is free for non-commercial, research and evaluation use 
+# This software is free for non-commercial, research and evaluation use
 # under the terms of the LICENSE.md file.
 #
 # For inquiries contact  george.drettakis@inria.fr
 #
 
+import math
+
+from typing import NamedTuple
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import math
-import numpy as np
-from typing import NamedTuple
-from torch import Tensor
+
 from kornia.core import Tensor, stack
 from kornia.utils._compat import torch_meshgrid
+from torch import Tensor
+
 
 def create_meshgrid(
     height: int,
@@ -80,13 +84,14 @@ def create_meshgrid(
     base_grid: Tensor = stack(torch_meshgrid([xs, ys], indexing="ij"), dim=-1)  # WxHx2
     return base_grid.permute(1, 0, 2).unsqueeze(0)  # 1xHxWx2
 
+
 def build_orthonormal_basis(vec):
-    '''
-        build orthonormal basis from 3d vec
-        vec: [batch_size, 3]
-    '''
+    """
+    build orthonormal basis from 3d vec
+    vec: [batch_size, 3]
+    """
     vec = vec / torch.norm(vec, dim=-1, keepdim=True)
-    
+
     mask = torch.abs(vec[:, 0]) > torch.abs(vec[:, 2])
     b1 = torch.zeros_like(vec)
     if mask.any():
@@ -95,15 +100,17 @@ def build_orthonormal_basis(vec):
     if (~mask).any():
         b1[~mask, 1] = -vec[~mask, 2]
         b1[~mask, 2] = vec[~mask, 1]
-    
+
     b1 = b1 / torch.norm(b1, dim=-1, keepdim=True)
     b2 = torch.cross(b1, vec)
     return b1, b2
 
+
 class BasicPointCloud(NamedTuple):
-    points : np.array
-    colors : np.array
-    normals : np.array
+    points: np.array
+    colors: np.array
+    normals: np.array
+
 
 def geom_transform_points(points, transf_matrix):
     P, _ = points.shape
@@ -114,12 +121,14 @@ def geom_transform_points(points, transf_matrix):
     denom = points_out[..., 3:] + 0.0000001
     return (points_out[..., :3] / denom).squeeze(dim=0)
 
+
 def getWorld2View(R, t):
     Rt = np.zeros((4, 4))
     Rt[:3, :3] = R.transpose()
     Rt[:3, 3] = t
     Rt[3, 3] = 1.0
     return np.float32(Rt)
+
 
 def getWorld2View_cuda(R, t):
     Rt = torch.zeros((4, 4), dtype=R.dtype, device=R.device)
@@ -128,7 +137,8 @@ def getWorld2View_cuda(R, t):
     Rt[3, 3] = 1.0
     return Rt.float()
 
-def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
+
+def getWorld2View2(R, t, translate=np.array([0.0, 0.0, 0.0]), scale=1.0):
     Rt = np.zeros((4, 4))
     Rt[:3, :3] = R.transpose()
     Rt[:3, 3] = t
@@ -140,6 +150,7 @@ def getWorld2View2(R, t, translate=np.array([.0, .0, .0]), scale=1.0):
     C2W[:3, 3] = cam_center
     Rt = np.linalg.inv(C2W)
     return np.float32(Rt)
+
 
 def getProjectionMatrix(znear, zfar, fovX, fovY):
     tanHalfFovY = math.tan((fovY / 2))
@@ -163,11 +174,14 @@ def getProjectionMatrix(znear, zfar, fovX, fovY):
     P[2, 3] = -(zfar * znear) / (zfar - znear)
     return P
 
+
 def fov2focal(fov, pixels):
     return pixels / (2 * math.tan(fov / 2))
 
+
 def focal2fov(focal, pixels):
-    return 2*math.atan(pixels/(2*focal))
+    return 2 * math.atan(pixels / (2 * focal))
+
 
 def ndc_2_cam(ndc_xyz, intrinsic, W, H):
     inv_scale = torch.tensor([[W - 1, H - 1]], device=ndc_xyz.device)
@@ -176,6 +190,7 @@ def ndc_2_cam(ndc_xyz, intrinsic, W, H):
     cam_xyz = torch.cat([cam_xy, cam_z], dim=-1)
     cam_xyz = cam_xyz @ torch.inverse(intrinsic[0, ...].t())
     return cam_xyz
+
 
 def depth2point_cam(sampled_depth, ref_intrinsic):
     B, N, C, H, W = sampled_depth.shape
@@ -187,56 +202,61 @@ def depth2point_cam(sampled_depth, ref_intrinsic):
     valid_x = valid_x[None, None, None, ...].expand(B, N, C, -1, -1)
     valid_y = valid_y[None, None, None, ...].expand(B, N, C, -1, -1)
     ndc_xyz = torch.stack([valid_x, valid_y, valid_z], dim=-1).view(B, N, C, H, W, 3)  # 1, 1, 5, 512, 640, 3
-    cam_xyz = ndc_2_cam(ndc_xyz, ref_intrinsic, W, H) # 1, 1, 5, 512, 640, 3
+    cam_xyz = ndc_2_cam(ndc_xyz, ref_intrinsic, W, H)  # 1, 1, 5, 512, 640, 3
     return ndc_xyz, cam_xyz
+
 
 def depth2point_world(depth_image, intrinsic_matrix, extrinsic_matrix):
     # depth_image: (H, W), intrinsic_matrix: (3, 3), extrinsic_matrix: (4, 4)
-    _, xyz_cam = depth2point_cam(depth_image[None,None,None,...], intrinsic_matrix[None,...])
-    xyz_cam = xyz_cam.reshape(-1,3)
-    xyz_world = torch.cat([xyz_cam, torch.ones_like(xyz_cam[...,0:1])], axis=-1) @ torch.inverse(extrinsic_matrix).transpose(0,1)
-    xyz_world = xyz_world[...,:3]
+    _, xyz_cam = depth2point_cam(depth_image[None, None, None, ...], intrinsic_matrix[None, ...])
+    xyz_cam = xyz_cam.reshape(-1, 3)
+    xyz_world = torch.cat([xyz_cam, torch.ones_like(xyz_cam[..., 0:1])], axis=-1) @ torch.inverse(
+        extrinsic_matrix
+    ).transpose(0, 1)
+    xyz_world = xyz_world[..., :3]
 
     return xyz_world
+
 
 def depths_to_points(view, depthmap):
     c2w = (view.world_view_transform.T).inverse()
     W, H = view.image_width, view.image_height
-    fx = W / (2 * math.tan(view.FoVx / 2.))
-    fy = H / (2 * math.tan(view.FoVy / 2.))
-    intrins = torch.tensor(
-        [[fx, 0., W/2.],
-        [0., fy, H/2.],
-        [0., 0., 1.0]]
-    ).float().cuda()
-    grid_x, grid_y = torch.meshgrid(torch.arange(W, device='cuda').float(), torch.arange(H, device='cuda').float(), indexing='xy')
+    fx = W / (2 * math.tan(view.FoVx / 2.0))
+    fy = H / (2 * math.tan(view.FoVy / 2.0))
+    intrins = torch.tensor([[fx, 0.0, W / 2.0], [0.0, fy, H / 2.0], [0.0, 0.0, 1.0]]).float().cuda()
+    grid_x, grid_y = torch.meshgrid(
+        torch.arange(W, device="cuda").float(), torch.arange(H, device="cuda").float(), indexing="xy"
+    )
     points = torch.stack([grid_x, grid_y, torch.ones_like(grid_x)], dim=-1).reshape(-1, 3)
-    rays_d = points @ intrins.inverse().T @ c2w[:3,:3].T
-    rays_o = c2w[:3,3]
+    rays_d = points @ intrins.inverse().T @ c2w[:3, :3].T
+    rays_o = c2w[:3, 3]
     points = depthmap.reshape(-1, 1) * rays_d + rays_o
     return points
 
+
 def depth_pcd2normal(xyz):
-    hd, wd, _ = xyz.shape 
-    bottom_point = xyz[..., 2:hd,   1:wd-1, :]
-    top_point    = xyz[..., 0:hd-2, 1:wd-1, :]
-    right_point  = xyz[..., 1:hd-1, 2:wd,   :]
-    left_point   = xyz[..., 1:hd-1, 0:wd-2, :]
+    hd, wd, _ = xyz.shape
+    bottom_point = xyz[..., 2:hd, 1 : wd - 1, :]
+    top_point = xyz[..., 0 : hd - 2, 1 : wd - 1, :]
+    right_point = xyz[..., 1 : hd - 1, 2:wd, :]
+    left_point = xyz[..., 1 : hd - 1, 0 : wd - 2, :]
     left_to_right = right_point - left_point
-    bottom_to_top = top_point - bottom_point 
+    bottom_to_top = top_point - bottom_point
     xyz_normal = torch.cross(left_to_right, bottom_to_top, dim=-1)
     xyz_normal = torch.nn.functional.normalize(xyz_normal, p=2, dim=-1)
-    xyz_normal = torch.nn.functional.pad(xyz_normal.permute(2,0,1), (1,1,1,1), mode='constant').permute(1,2,0)
+    xyz_normal = torch.nn.functional.pad(xyz_normal.permute(2, 0, 1), (1, 1, 1, 1), mode="constant").permute(1, 2, 0)
     return xyz_normal
+
 
 def normal_from_depth_image(depth, intrinsic_matrix, extrinsic_matrix):
     # depth: (H, W), intrinsic_matrix: (3, 3), extrinsic_matrix: (4, 4)
     # xyz_normal: (H, W, 3)
-    xyz_world = depth2point_world(depth, intrinsic_matrix, extrinsic_matrix) # (HxW, 3)
+    xyz_world = depth2point_world(depth, intrinsic_matrix, extrinsic_matrix)  # (HxW, 3)
     xyz_world = xyz_world.reshape(*depth.shape, 3)
     xyz_normal = depth_pcd2normal(xyz_world)
 
     return xyz_normal
+
 
 def get_dtu_raydir(pixelcoords, intrinsic, rot, dir_norm):
     # rot is c2w
@@ -245,13 +265,14 @@ def get_dtu_raydir(pixelcoords, intrinsic, rot, dir_norm):
     y = (pixelcoords[..., 1] + 0.5 - intrinsic[1, 2]) / intrinsic[1, 1]
     z = torch.ones_like(x)
     dirs = torch.stack([x, y, z], axis=-1)
-    dirs = dirs @ rot[:,:].T #\
+    dirs = dirs @ rot[:, :].T  # \
     if dir_norm:
         dirs = torch.nn.functional.normalize(dirs, dim=-1)
     return dirs
 
+
 def get_rays(width, height, focal, c2w):
-    grid = create_meshgrid(height, width, normalized_coordinates=False)[0] + 0.5 # 1xHxWx2
+    grid = create_meshgrid(height, width, normalized_coordinates=False)[0] + 0.5  # 1xHxWx2
 
     i, j = grid.unbind(-1)
     # the direction here is without +0.5 pixel centering as calibration is not so accurate
@@ -262,6 +283,7 @@ def get_rays(width, height, focal, c2w):
     rays_d = directions.cuda() @ c2w[:3, :3].T
     return rays_d
 
+
 def linear2srgb_torch(tensor_0to1):
     if isinstance(tensor_0to1, torch.Tensor):
         pow_func = torch.pow
@@ -270,7 +292,7 @@ def linear2srgb_torch(tensor_0to1):
         pow_func = np.power
         where_func = np.where
     else:
-        raise NotImplementedError(f'Do not support dtype {type(tensor_0to1)}')
+        raise NotImplementedError(f"Do not support dtype {type(tensor_0to1)}")
 
     srgb_linear_thres = 0.0031308
     srgb_linear_coeff = 12.92
@@ -278,15 +300,16 @@ def linear2srgb_torch(tensor_0to1):
     srgb_exponent = 2.4
 
     tensor_linear = tensor_0to1 * srgb_linear_coeff
-    
-    tensor_nonlinear = srgb_exponential_coeff * (
-        pow_func(tensor_0to1 + 1e-6, 1 / srgb_exponent)
-    ) - (srgb_exponential_coeff - 1)
+
+    tensor_nonlinear = srgb_exponential_coeff * (pow_func(tensor_0to1 + 1e-6, 1 / srgb_exponent)) - (
+        srgb_exponential_coeff - 1
+    )
 
     is_linear = tensor_0to1 <= srgb_linear_thres
     tensor_srgb = where_func(is_linear, tensor_linear, tensor_nonlinear)
 
     return tensor_srgb
+
 
 def lookat2c2w(look_at, up):
     xaxis = torch.cross(look_at, up)
@@ -296,11 +319,12 @@ def lookat2c2w(look_at, up):
     mat = torch.stack([xaxis, yaxis, look_at], -1).reshape(3, 3)
     return mat
 
+
 def normal2quat(v2):
     v1 = torch.zeros_like(v2)
     v1[:, 2] = 1
-    a  = torch.cross(v1, v2)
+    a = torch.cross(v1, v2)
     w = torch.sqrt((v1**2).sum(-1) * (v2**2).sum(-1)) + (v1 * v2).sum(-1)
-    q = torch.stack([w, a[:, 0],  a[:, 1], a[:, 2]], -1)
+    q = torch.stack([w, a[:, 0], a[:, 1], a[:, 2]], -1)
     q = F.normalize(q, dim=-1)
     return q

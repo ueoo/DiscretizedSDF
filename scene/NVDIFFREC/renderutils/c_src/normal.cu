@@ -2,10 +2,10 @@
  * Copyright (c) 2020-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related 
- * documentation and any modifications thereto. Any use, reproduction, 
+ * property and proprietary rights in and to this material, related
+ * documentation and any modifications thereto. Any use, reproduction,
  * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or 
+ * without an express license agreement from NVIDIA CORPORATION or
  * its affiliates is strictly prohibited.
  */
 
@@ -32,14 +32,14 @@ __device__ void bwdPerturbNormal(const vec3f perturbed_nrm, const vec3f smooth_n
     vec3f _smooth_bitng = cross(smooth_tng, smooth_nrm);
     vec3f smooth_bitng = safeNormalize(_smooth_bitng);
     vec3f _shading_nrm = smooth_tng * perturbed_nrm.x + (opengl ? -1 : 1) * smooth_bitng * perturbed_nrm.y + smooth_nrm * max(perturbed_nrm.z, 0.0f);
-        
+
     ////////////////////////////////////////////////////////////////////////
     // BWD
     vec3f d_shading_nrm(0);
     bwdSafeNormalize(_shading_nrm, d_shading_nrm, d_out);
 
     vec3f d_smooth_bitng(0);
-    
+
     if (perturbed_nrm.z > 0.0f)
     {
         d_smooth_nrm += d_shading_nrm * perturbed_nrm.z;
@@ -95,7 +95,7 @@ __device__ void bwdBendNormal(const vec3f view_vec, const vec3f smooth_nrm, cons
 //------------------------------------------------------------------------
 // Kernels
 
-__global__ void PrepareShadingNormalFwdKernel(PrepareShadingNormalKernelParams p) 
+__global__ void PrepareShadingNormalFwdKernel(PrepareShadingNormalKernelParams p)
 {
     // Calculate pixel position.
     unsigned int px = blockIdx.x * blockDim.x + threadIdx.x;
@@ -125,8 +125,8 @@ __global__ void PrepareShadingNormalFwdKernel(PrepareShadingNormalKernelParams p
     p.out.store(px, py, pz, res);
 }
 
-__global__ void PrepareShadingNormalBwdKernel(PrepareShadingNormalKernelParams p) 
-{ 
+__global__ void PrepareShadingNormalBwdKernel(PrepareShadingNormalKernelParams p)
+{
     // Calculate pixel position.
     unsigned int px = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int py = blockIdx.y * blockDim.y + threadIdx.y;

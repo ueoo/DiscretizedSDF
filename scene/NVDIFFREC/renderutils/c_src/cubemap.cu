@@ -2,10 +2,10 @@
  * Copyright (c) 2020-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *
  * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
- * property and proprietary rights in and to this material, related 
- * documentation and any modifications thereto. Any use, reproduction, 
+ * property and proprietary rights in and to this material, related
+ * documentation and any modifications thereto. Any use, reproduction,
  * disclosure or distribution of this material and related documentation
- * without an express license agreement from NVIDIA CORPORATION or 
+ * without an express license agreement from NVIDIA CORPORATION or
  * its affiliates is strictly prohibited.
  */
 
@@ -169,7 +169,7 @@ __global__ void DiffuseCubemapBwdKernel(DiffuseCubemapKernelParams p)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
-// GGX splitsum kernel 
+// GGX splitsum kernel
 
 __device__ inline float ndfGGX(const float alphaSqr, const float cosTheta)
 {
@@ -194,10 +194,10 @@ __global__ void SpecularBoundsKernel(SpecularBoundsKernelParams p)
     // Brute force entire cubemap and compute bounds for the cone
     for (int s = 0; s < p.gridSize.z; ++s)
     {
-        // Assume empty BBox 
+        // Assume empty BBox
         int _min_x = p.gridSize.x - 1, _max_x = 0;
         int _min_y = p.gridSize.y - 1, _max_y = 0;
-        
+
         // For each (8x8) tile
         for (int tx = 0; tx < (p.gridSize.x + TILE_SIZE - 1) / TILE_SIZE; tx++)
         {
@@ -210,7 +210,7 @@ __global__ void SpecularBoundsKernel(SpecularBoundsKernelParams p)
                 // Use some blunt interval arithmetics to cull tiles
                 vec3f L0 = cube_to_dir(tsx, tsy, s, Npx), L1 = cube_to_dir(tex, tsy, s, Npx);
                 vec3f L2 = cube_to_dir(tsx, tey, s, Npx), L3 = cube_to_dir(tex, tey, s, Npx);
-                
+
                 float minx = min(min(L0.x, L1.x), min(L2.x, L3.x)), maxx = max(max(L0.x, L1.x), max(L2.x, L3.x));
                 float miny = min(min(L0.y, L1.y), min(L2.y, L3.y)), maxy = max(max(L0.y, L1.y), max(L2.y, L3.y));
                 float minz = min(min(L0.z, L1.z), min(L2.z, L3.z)), maxz = max(max(L0.z, L1.z), max(L2.z, L3.z));
