@@ -99,6 +99,7 @@ def render_set(model_path, name, iteration, views, scene, pipeline, background):
             torchvision.utils.save_image(render_pkg[k], os.path.join(save_path, "{0:05d}".format(idx) + ".png"))
 
 
+@torch.no_grad()
 def relight_sets(
     dataset: ModelParams,
     iteration: int,
@@ -124,33 +125,28 @@ def relight_sets(
     envmap = latlong_to_cubemap_trans(envmap, (512, 512), transform_mat)
     envmap = envmap.reshape(6, 512, 512, 3)
 
-    with torch.no_grad():
-        gaussians = GaussianModel(dataset.sh_degree, dataset.env_mode, dataset.env_res, dataset.use_sdf, True, False)
+    gaussians = GaussianModel(dataset.sh_degree, dataset.env_mode, dataset.env_res, dataset.use_sdf, True, False)
+    scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
+    scene.gaussians.set_envmap(envmap.contiguous())
+    bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+    background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+    if args.interpolate > 0:
+        cams = interpolate_camera(scene.getTrainCameras(), args.interpolate)
+    else:
+        cams = scene.getTrainCameras()
+    if not skip_train:
+        render_set(dataset.model_path + f"/relight/{name}", "train", scene.loaded_iter, cams, scene, pipeline, background)
 
-        scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
-        scene.gaussians.set_envmap(envmap.contiguous())
-
-        bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
-        background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
-        if args.interpolate > 0:
-            cams = interpolate_camera(scene.getTrainCameras(), args.interpolate)
-        else:
-            cams = scene.getTrainCameras()
-        if not skip_train:
-            render_set(
-                dataset.model_path + f"/relight/{name}", "train", scene.loaded_iter, cams, scene, pipeline, background
-            )
-
-        if not skip_test:
-            render_set(
-                dataset.model_path + f"/relight/{name}",
-                "test",
-                scene.loaded_iter,
-                scene.getTestCameras(),
-                scene,
-                pipeline,
-                background,
-            )
+    if not skip_test:
+        render_set(
+            dataset.model_path + f"/relight/{name}",
+            "test",
+            scene.loaded_iter,
+            scene.getTestCameras(),
+            scene,
+            pipeline,
+            background,
+        )
 
 
 if __name__ == "__main__":

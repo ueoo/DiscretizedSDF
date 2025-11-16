@@ -1,7 +1,8 @@
 #!/bin/bash
 
 root_dir="data/shiny_blender/"
-list="helmet teapot toaster coffee ball car"
+# list="helmet teapot toaster coffee ball car"
+list="car"
 
 for i in $list; do
 
@@ -17,7 +18,6 @@ python train.py --eval \
 --port 12991 \
 --lambda_base_smoothness 0.02 \
 --lambda_light_reg 0.001 \
---zero_one_use_gt \
 --iterations 30000 \
 --lambda_distortion 2000 \
 --gaussian_type 2d \

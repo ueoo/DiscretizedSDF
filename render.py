@@ -79,25 +79,23 @@ def render_set(model_path, name, iteration, views, scene, pipeline, background):
             torchvision.utils.save_image(render_pkg[k], os.path.join(save_path, "{0:05d}".format(idx) + ".png"))
 
 
+@torch.no_grad()
 def render_sets(dataset: ModelParams, iteration: int, pipeline: PipelineParams, skip_train: bool, skip_test: bool):
-    with torch.no_grad():
-        gaussians = GaussianModel(dataset.sh_degree, dataset.env_mode, dataset.env_res, dataset.use_sdf, True, True)
-        scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
-        bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
-        background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
-        if args.interpolate > 0:
-            cams = interpolate_camera(scene.getTrainCameras(), args.interpolate)
-        else:
-            cams = scene.getTrainCameras()
-        if not skip_train:
-            render_set(dataset.model_path, "train", scene.loaded_iter, cams, scene, pipeline, background)
+    gaussians = GaussianModel(dataset.sh_degree, dataset.env_mode, dataset.env_res, dataset.use_sdf, True, True)
+    scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
+    bg_color = [1, 1, 1] if dataset.white_background else [0, 0, 0]
+    background = torch.tensor(bg_color, dtype=torch.float32, device="cuda")
+    if args.interpolate > 0:
+        cams = interpolate_camera(scene.getTrainCameras(), args.interpolate)
+    else:
+        cams = scene.getTrainCameras()
+    if not skip_train:
+        render_set(dataset.model_path, "train", scene.loaded_iter, cams, scene, pipeline, background)
 
-        if not skip_test:
-            render_set(
-                dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), scene, pipeline, background
-            )
+    if not skip_test:
+        render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), scene, pipeline, background)
 
-        render_lightings(dataset.model_path, "lighting", scene.loaded_iter, scene, sample_num=1)
+    render_lightings(dataset.model_path, "lighting", scene.loaded_iter, scene, sample_num=1)
 
 
 if __name__ == "__main__":

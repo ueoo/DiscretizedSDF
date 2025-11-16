@@ -1,7 +1,9 @@
 #!/bin/bash
 
 root_dir="data/tensoir_synthetic/"
-list="armadillo lego ficus hotdog"
+# list="armadillo lego ficus hotdog"
+
+list="lego"
 
 for i in $list; do
 
@@ -16,7 +18,6 @@ python train.py --eval \
 --env_mode envmap \
 --port 12991 \
 --lambda_brdf_smoothness 0.02 \
---sdf_from_iter 999999 \
 --lambda_distortion 2000 \
 --gaussian_type 2d \
 --use_sdf \

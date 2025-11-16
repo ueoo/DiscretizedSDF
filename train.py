@@ -21,7 +21,8 @@ import torch
 import torchvision
 
 from fused_ssim import fused_ssim
-from tqdm import tqdm
+from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm, trange
 
 from arguments import ModelParams, OptimizationParams, PipelineParams
 from gaussian_renderer import RENDER_DICT, render_lighting
@@ -35,14 +36,6 @@ from utils.loss_utils import (
     l1_loss,
     predicted_normal_loss,
 )
-
-
-try:
-    from torch.utils.tensorboard import SummaryWriter
-
-    TENSORBOARD_FOUND = True
-except ImportError:
-    TENSORBOARD_FOUND = False
 
 
 def training(dataset, opt, pipe, testing_iterations, saving_iterations, load_iteration):
@@ -68,7 +61,7 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, load_ite
     viewpoint_stack = None
     ema_loss_for_log = 0.0
     load_iteration = load_iteration if load_iteration > 0 else 0
-    progress_bar = tqdm(range(load_iteration, opt.iterations), desc="Training progress")
+    progress_bar = trange(load_iteration, opt.iterations, desc="Training progress")
 
     for iteration in range(load_iteration + 1, opt.iterations + 1):
         if dataset.random_background == True:
@@ -97,11 +90,9 @@ def training(dataset, opt, pipe, testing_iterations, saving_iterations, load_ite
         # Render
         render_pkg = render_fn(viewpoint_cam, scene, pipe, background, debug=False)
         image = render_pkg["render"]
-        viewspace_point_tensor, visibility_filter, radii = (
-            render_pkg["viewspace_points"],
-            render_pkg["visibility_filter"],
-            render_pkg["radii"],
-        )
+        viewspace_point_tensor = render_pkg["viewspace_points"]
+        visibility_filter = render_pkg["visibility_filter"]
+        radii = render_pkg["radii"]
 
         gt_image = gt_image * mask + background[:, None, None] * (1 - mask)
         loss = torch.tensor(0.0).cuda()
@@ -255,14 +246,11 @@ def prepare_output_and_logger(args, opt, pipe):
         cfg_log_f.write(str(Namespace(**vars(pipe))))
 
     # Create Tensorboard writer
-    tb_writer = None
-    if TENSORBOARD_FOUND:
-        tb_writer = SummaryWriter(args.model_path)
-    else:
-        print("Tensorboard not available: not logging progress")
+    tb_writer = SummaryWriter(args.model_path)
     return tb_writer
 
 
+@torch.no_grad()
 def training_report(
     tb_writer,
     iteration,
@@ -297,77 +285,71 @@ def training_report(
                 "cameras": [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)],
             },
         )
-        with torch.no_grad():
-            # with torch.enable_grad():
-            for config in validation_configs:
-                if config["cameras"] and len(config["cameras"]) > 0:
-                    images = torch.tensor([], device="cuda")
-                    gts = torch.tensor([], device="cuda")
-                    vis_idx = [i for i in range(0, len(config["cameras"]), len(config["cameras"]) // 4)]
-                    for idx, viewpoint in enumerate(config["cameras"]):
-                        if idx not in vis_idx:
-                            continue
-                        mask = viewpoint.gt_alpha_mask.cuda()
-                        gt_image = viewpoint.original_image.cuda()
-                        H, W = gt_image.shape[1:]
-                        mask[mask < 0.5] = 0
-                        mask[mask >= 0.5] = 1
-                        render_pkg = renderFunc(viewpoint, scene, *renderArgs, **renderArgDict)
+        for config in validation_configs:
+            if not config["cameras"] or len(config["cameras"]) == 0:
+                continue
 
-                        image = torch.clamp(render_pkg["render"], 0.0, 1.0)
-                        gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
-                        images = torch.cat((images, image.unsqueeze(0)), dim=0)
-                        gts = torch.cat((gts, gt_image.unsqueeze(0)), dim=0)
-                        if tb_writer and (idx in vis_idx):
-                            tb_writer.add_images(
-                                config["name"] + "_view_{}/render".format(viewpoint.image_name),
-                                image[None],
-                                global_step=iteration,
-                            )
-                            if iteration == testing_iterations[0]:
-                                tb_writer.add_images(
-                                    config["name"] + "_view_{}/ground_truth".format(viewpoint.image_name),
-                                    gt_image[None],
-                                    global_step=iteration,
-                                )
-                            for k in render_pkg.keys():
-                                if render_pkg[k].dim() < 3 or k == "delta_normal_norm":
-                                    continue
-                                if "depth" in k:
-                                    image_k = apply_depth_colormap(-render_pkg[k][0][..., None])
-                                    image_k = image_k.permute(2, 0, 1)
-                                elif k == "alpha":
-                                    image_k = apply_depth_colormap(render_pkg[k][0][..., None], min=0.0, max=1.0)
-                                    image_k = image_k.permute(2, 0, 1)
-                                elif k == "render":
-                                    image_k = render_pkg["render"]
-                                else:
-                                    if "normal" in k:
-                                        render_pkg[k] = 0.5 + (0.5 * render_pkg[k])  # (-1, 1) -> (0, 1)
-                                    image_k = torch.clamp(render_pkg[k], 0.0, 1.0)
-                                tb_writer.add_images(
-                                    config["name"] + "_view_{}/{}".format(viewpoint.image_name, k),
-                                    image_k[None],
-                                    global_step=iteration,
-                                )
-                                save_dir = f'{scene.model_path}/eval/iteration_{iteration:05d}/{config["name"]}'
-                                os.makedirs(save_dir, exist_ok=True)
-                                torchvision.utils.save_image(image_k, f"{save_dir}/{idx:03d}_{k}.png")
-                            lighting = render_lighting(scene.gaussians, resolution=(512, 1024))
-                            if tb_writer:
-                                tb_writer.add_images(
-                                    config["name"] + "/lighting", lighting[None], global_step=iteration
-                                )
-                    l1_test = l1_loss(images, gts)
-                    psnr_test = psnr(images, gts).mean()
-                    print(
-                        "\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(
-                            iteration, config["name"], l1_test, psnr_test
-                        )
+            images = torch.tensor([], device="cuda")
+            gts = torch.tensor([], device="cuda")
+            vis_idx = [i for i in range(0, len(config["cameras"]), len(config["cameras"]) // 4)]
+            for idx, viewpoint in enumerate(config["cameras"]):
+                if idx not in vis_idx:
+                    continue
+                mask = viewpoint.gt_alpha_mask.cuda()
+                gt_image = viewpoint.original_image.cuda()
+                H, W = gt_image.shape[1:]
+                mask[mask < 0.5] = 0
+                mask[mask >= 0.5] = 1
+                render_pkg = renderFunc(viewpoint, scene, *renderArgs, **renderArgDict)
+
+                image = torch.clamp(render_pkg["render"], 0.0, 1.0)
+                gt_image = torch.clamp(viewpoint.original_image.to("cuda"), 0.0, 1.0)
+                images = torch.cat((images, image.unsqueeze(0)), dim=0)
+                gts = torch.cat((gts, gt_image.unsqueeze(0)), dim=0)
+                if tb_writer and (idx in vis_idx):
+                    tb_writer.add_images(
+                        config["name"] + "_view_{}/render".format(viewpoint.image_name),
+                        image[None],
+                        global_step=iteration,
                     )
+                    if iteration == testing_iterations[0]:
+                        tb_writer.add_images(
+                            config["name"] + "_view_{}/ground_truth".format(viewpoint.image_name),
+                            gt_image[None],
+                            global_step=iteration,
+                        )
+                    for k in render_pkg.keys():
+                        if render_pkg[k].dim() < 3 or k == "delta_normal_norm":
+                            continue
+                        if "depth" in k:
+                            image_k = apply_depth_colormap(-render_pkg[k][0][..., None])
+                            image_k = image_k.permute(2, 0, 1)
+                        elif k == "alpha":
+                            image_k = apply_depth_colormap(render_pkg[k][0][..., None], min=0.0, max=1.0)
+                            image_k = image_k.permute(2, 0, 1)
+                        elif k == "render":
+                            image_k = render_pkg["render"]
+                        else:
+                            if "normal" in k:
+                                render_pkg[k] = 0.5 + (0.5 * render_pkg[k])  # (-1, 1) -> (0, 1)
+                            image_k = torch.clamp(render_pkg[k], 0.0, 1.0)
+                        tb_writer.add_images(
+                            config["name"] + "_view_{}/{}".format(viewpoint.image_name, k),
+                            image_k[None],
+                            global_step=iteration,
+                        )
+                        save_dir = f'{scene.model_path}/eval/iteration_{iteration:05d}/{config["name"]}'
+                        os.makedirs(save_dir, exist_ok=True)
+                        torchvision.utils.save_image(image_k, f"{save_dir}/{idx:03d}_{k}.png")
+                    lighting = render_lighting(scene.gaussians, resolution=(512, 1024))
                     if tb_writer:
-                        tb_writer.add_scalar(config["name"] + "/loss_viewpoint - l1_loss", l1_test, iteration)
-                        tb_writer.add_scalar(config["name"] + "/loss_viewpoint - psnr", psnr_test, iteration)
+                        tb_writer.add_images(config["name"] + "/lighting", lighting[None], global_step=iteration)
+            l1_test = l1_loss(images, gts)
+            psnr_test = psnr(images, gts).mean()
+            print("\n[ITER {}] Evaluating {}: L1 {} PSNR {}".format(iteration, config["name"], l1_test, psnr_test))
+            if tb_writer:
+                tb_writer.add_scalar(config["name"] + "/loss_viewpoint - l1_loss", l1_test, iteration)
+                tb_writer.add_scalar(config["name"] + "/loss_viewpoint - psnr", psnr_test, iteration)
         render_set(
             scene.model_path,
             "test",
